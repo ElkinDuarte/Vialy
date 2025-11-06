@@ -1,34 +1,39 @@
-import { useNavigation } from '@react-navigation/native';
+import { DrawerNavigationProp } from '@react-navigation/drawer';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useRef, useState } from 'react';
-
 import {
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
+import SendSvg from '../../assets/images/btn_enviar.svg';
+import LogoSvg from '../../assets/images/logo.svg';
 
-export default function ChatScreen() {
-    const navigation = useNavigation<any>();
-    const [message, setMessage] = useState('');
-    const [messages, setMessages] = useState([
+interface Message {
+  id: number;
+  text: string;
+  isBot: boolean;
+  timestamp: Date;
+}
+
+type ChatScreenProps = {
+  navigation: DrawerNavigationProp<any>;
+};
+
+export default function ChatScreen({ navigation }: ChatScreenProps) {
+  const [message, setMessage] = useState<string>('');
+  const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
       text: '¡Hola! ¿En qué puedo ayudarte?',
       isBot: true,
-      timestamp: new Date()
-    },
-    {
-      id: 2,
-      text: '¿Cuál es el límite de velocidad en zona urbana?',
-      isBot: false,
       timestamp: new Date()
     }
   ]);
@@ -37,7 +42,7 @@ export default function ChatScreen() {
 
   const handleSendMessage = () => {
     if (message.trim()) {
-      const newMessage = {
+      const newMessage: Message = {
         id: messages.length + 1,
         text: message,
         isBot: false,
@@ -49,7 +54,7 @@ export default function ChatScreen() {
       
       // Simular respuesta del bot después de 1 segundo
       setTimeout(() => {
-        const botResponse = {
+        const botResponse: Message = {
           id: messages.length + 2,
           text: 'Esta es una respuesta automática del asistente.',
           isBot: true,
@@ -61,11 +66,7 @@ export default function ChatScreen() {
   };
 
   const handleMenuPress = () => {
-    console.log('Menu pressed');
-  };
-
-  const handleProfilePress = () => {
-    console.log('Profile pressed');
+    navigation.openDrawer();
   };
 
   return (
@@ -86,7 +87,7 @@ export default function ChatScreen() {
             </TouchableOpacity>
             
             <View style={styles.logoIcon}>
-              <Text style={styles.logoIconText}>🛣️</Text>
+              <LogoSvg width={40} height={40} />
             </View>
           </View>
 
@@ -97,7 +98,7 @@ export default function ChatScreen() {
         </View>
       </LinearGradient>
 
-      {/* Chat Messages */}
+      {/* Chat de mensajes */}
       <ScrollView
         ref={scrollViewRef}
         style={styles.messagesContainer}
@@ -143,7 +144,7 @@ export default function ChatScreen() {
         ))}
       </ScrollView>
 
-      {/* Input Area */}
+      {/* Area de mensajes de entrada*/}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
@@ -162,7 +163,7 @@ export default function ChatScreen() {
               style={styles.sendButton}
               onPress={handleSendMessage}
             >
-              <Text style={styles.sendIcon}>✈️</Text>
+              <SendSvg width={30} height={20} color={'white'}/>
             </TouchableOpacity>
           </View>
         </View>
@@ -203,7 +204,6 @@ const styles = StyleSheet.create({
   logoIcon: {
     width: 40,
     height: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     backgroundColor: '#2d4a75',
-    borderRadius: 22,
+    borderRadius: 17,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
