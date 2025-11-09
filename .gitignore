@@ -1,0 +1,15 @@
+# Ignorar entornos virtuales
+venv/
+Backend_Vialy/venv/
+
+# Archivos grandes o de dependencias
+*.dll
+*.lib
+__pycache__/
+*.pyc
+
+# Configuración de IDEs
+.vscode/
+.idea/
+
+.env
