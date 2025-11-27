@@ -2,6 +2,8 @@ import { DrawerNavigationProp } from '@react-navigation/drawer';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
@@ -15,53 +17,99 @@ import {
 } from 'react-native';
 import SendSvg from '../../assets/images/btn_enviar.svg';
 import LogoSvg from '../../assets/images/logo.svg';
+import { apiRequest, API_ENDPOINTS } from '../../config/api';
+
 
 interface Message {
   id: number;
   text: string;
   isBot: boolean;
   timestamp: Date;
+  sources?: Array<{
+    extracto: string;
+    pagina: string | null;
+    archivo: string;
+  }>;
 }
 
 type ChatScreenProps = {
   navigation: DrawerNavigationProp<any>;
 };
 
+
 export default function ChatScreen({ navigation }: ChatScreenProps) {
   const [message, setMessage] = useState<string>('');
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
-      text: '¡Hola! ¿En qué puedo ayudarte?',
+      text: '¡Hola! Soy tu asistente del Código Nacional de Tránsito de Colombia. ¿En qué puedo ayudarte?',
       isBot: true,
       timestamp: new Date()
     }
   ]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const handleSendMessage = () => {
-    if (message.trim()) {
-      const newMessage: Message = {
+  // Función para enviar mensaje a la API
+  const sendMessageToAPI = async (userMessage: string) => {
+    try {
+      setIsLoading(true);
+
+      const data = await apiRequest(API_ENDPOINTS.ASK, {
+        method: 'POST',
+        body: JSON.stringify({
+          query: userMessage
+        }),
+      });
+
+      // Crear mensaje del bot con la respuesta
+      const botResponse: Message = {
+        id: messages.length + 2,
+        text: data.response || data.message || "Sin respuesta del servidor.",
+        isBot: true,
+        timestamp: new Date(),
+        sources: data.context_used ? data.sources : undefined
+      };
+
+      setMessages(prev => [...prev, botResponse]);
+    } catch (error) {
+      console.error('Error al comunicarse con la API:', error);
+      
+      // Mensaje de error amigable
+      const errorMessage: Message = {
+        id: messages.length + 2,
+        text: 'Lo siento, hubo un problema al procesar tu consulta. Por favor, intenta nuevamente.',
+        isBot: true,
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+      
+      Alert.alert(
+        'Error de conexión',
+        'No se pudo conectar con el servidor. Verifica tu conexión e intenta nuevamente.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (message.trim() && !isLoading) {
+      const userMessage: Message = {
         id: messages.length + 1,
         text: message,
         isBot: false,
         timestamp: new Date()
       };
       
-      setMessages([...messages, newMessage]);
+      setMessages(prev => [...prev, userMessage]);
+      const currentMessage = message;
       setMessage('');
       
-      // Simular respuesta del bot después de 1 segundo
-      setTimeout(() => {
-        const botResponse: Message = {
-          id: messages.length + 2,
-          text: 'Esta es una respuesta automática del asistente.',
-          isBot: true,
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, botResponse]);
-      }, 1000);
+      // Enviar mensaje a la API
+      await sendMessageToAPI(currentMessage);
     }
   };
 
@@ -106,42 +154,71 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
         onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
       >
         {messages.map((msg) => (
-          <View
-            key={msg.id}
-            style={[
-              styles.messageRow,
-              msg.isBot ? styles.botMessageRow : styles.userMessageRow
-            ]}
-          >
-            {msg.isBot && (
-              <View style={styles.botAvatar}>
-                <Text style={styles.botAvatarText}>🤖</Text>
-              </View>
-            )}
-            
+          <View key={msg.id}>
             <View
               style={[
-                styles.messageBubble,
-                msg.isBot ? styles.botBubble : styles.userBubble
+                styles.messageRow,
+                msg.isBot ? styles.botMessageRow : styles.userMessageRow
               ]}
             >
-              <Text
+              {msg.isBot && (
+                <View style={styles.botAvatar}>
+                  <Text style={styles.botAvatarText}>🤖</Text>
+                </View>
+              )}
+              
+              <View
                 style={[
-                  styles.messageText,
-                  msg.isBot ? styles.botText : styles.userText
+                  styles.messageBubble,
+                  msg.isBot ? styles.botBubble : styles.userBubble
                 ]}
               >
-                {msg.text}
-              </Text>
+                <Text
+                  style={[
+                    styles.messageText,
+                    msg.isBot ? styles.botText : styles.userText
+                  ]}
+                >
+                  {msg.text}
+                </Text>
+              </View>
+
+              {!msg.isBot && (
+                <View style={styles.userAvatar}>
+                  <Text style={styles.userAvatarText}>👤</Text>
+                </View>
+              )}
             </View>
 
-            {!msg.isBot && (
-              <View style={styles.userAvatar}>
-                <Text style={styles.userAvatarText}>👤</Text>
+            {/* Mostrar fuentes si existen */}
+            {msg.isBot && msg.sources && msg.sources.length > 0 && (
+              <View style={styles.sourcesContainer}>
+                <Text style={styles.sourcesTitle}>📚 Fuentes consultadas:</Text>
+                {msg.sources.map((source, index) => (
+                  <View key={index} style={styles.sourceItem}>
+                    <Text style={styles.sourceText}>
+                      • {source.archivo}
+                      {source.pagina && ` (Pág. ${source.pagina})`}
+                    </Text>
+                  </View>
+                ))}
               </View>
             )}
           </View>
         ))}
+
+        {/* Indicador de carga */}
+        {isLoading && (
+          <View style={styles.loadingContainer}>
+            <View style={styles.botAvatar}>
+              <Text style={styles.botAvatarText}>🤖</Text>
+            </View>
+            <View style={styles.loadingBubble}>
+              <ActivityIndicator size="small" color="#2d4a75" />
+              <Text style={styles.loadingText}>Consultando...</Text>
+            </View>
+          </View>
+        )}
       </ScrollView>
 
       {/* Area de mensajes de entrada*/}
@@ -158,12 +235,21 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
               placeholder="Escribe tu Consulta"
               placeholderTextColor="#999"
               multiline
+              editable={!isLoading}
             />
             <TouchableOpacity
-              style={styles.sendButton}
+              style={[
+                styles.sendButton,
+                (isLoading || !message.trim()) && styles.sendButtonDisabled
+              ]}
               onPress={handleSendMessage}
+              disabled={isLoading || !message.trim()}
             >
-              <SendSvg width={30} height={20} color={'white'}/>
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <SendSvg width={30} height={20} color={'white'}/>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -208,9 +294,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
-  },
-  logoIconText: {
-    fontSize: 24,
   },
   headerCenter: {
     flex: 1,
@@ -290,6 +373,49 @@ const styles = StyleSheet.create({
   userText: {
     color: '#fff',
   },
+  sourcesContainer: {
+    marginLeft: 44,
+    marginBottom: 15,
+    marginTop: -10,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 10,
+    padding: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#2d4a75',
+  },
+  sourcesTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 5,
+  },
+  sourceItem: {
+    marginTop: 3,
+  },
+  sourceText: {
+    fontSize: 11,
+    color: '#888',
+    lineHeight: 16,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  loadingBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e8eef5',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    borderBottomLeftRadius: 4,
+  },
+  loadingText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#666',
+  },
   inputContainer: {
     backgroundColor: '#fff',
     borderTopWidth: 1,
@@ -321,8 +447,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: 8,
   },
-  sendIcon: {
-    fontSize: 20,
-    transform: [{ rotate: '45deg' }],
+  sendButtonDisabled: {
+    backgroundColor: '#a0a0a0',
   },
 });

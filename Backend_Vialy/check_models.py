@@ -22,26 +22,26 @@ try:
     client = aiplatform.gapic.ModelServiceClient(credentials=credentials)
     parent = f"projects/chat-cnt/locations/us-central1"
     
-    print("🔍 Buscando modelos Gemini disponibles...")
+    print("Buscando modelos Gemini disponibles...")
     found_models = False
     
     for model in client.list_models(parent=parent):
         if "gemini" in model.display_name.lower():
-            print(f"✅ Modelo encontrado: {model.display_name}")
+            print(f"Modelo encontrado: {model.display_name}")
             print(f"   ID: {model.name}")
             print(f"   Región: us-central1")
             print("------")
             found_models = True
     
     if not found_models:
-        print("⚠️ No se encontraron modelos Gemini. Usando 'gemini-1.0-pro' como predeterminado")
+        print("No se encontraron modelos Gemini. Usando 'gemini-1.0-pro' como predeterminado")
         print("Posibles soluciones:")
         print("1. Verifica que la API de Vertex AI esté habilitada")
         print("2. Asegúrate que tu proyecto tenga facturación activa")
         print("3. Prueba con otra región como us-west4")
 
 except Exception as e:
-    print(f"❌ Error: {str(e)}")
+    print(f"Error: {str(e)}")
     print("\nSolución alternativa:")
     print("1. Verifica que el archivo vertex-key.json existe")
     print("2. Confirma que la cuenta de servicio tiene estos roles:")

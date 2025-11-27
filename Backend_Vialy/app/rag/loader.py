@@ -25,7 +25,7 @@ def load_documents(path: str = "app/rag/data") -> List[Document]:
         print(f"[Loader] Documentos cargados: {len(documents)}")
 
         if not documents:
-            print("[Loader] ⚠️ No se encontraron documentos válidos en el directorio.")
+            print("[Loader] No se encontraron documentos válidos en el directorio.")
 
         return documents
 

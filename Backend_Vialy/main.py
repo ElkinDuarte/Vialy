@@ -29,9 +29,9 @@ llm_model = None
 try:
     logger.info("[CHAIN] Iniciando cadena QA con Gemini...")
     qa_chain, llm_model = create_chain()
-    logger.info("[CHAIN] ✅ Cadena QA inicializada correctamente")
+    logger.info("[CHAIN] Cadena QA inicializada correctamente")
 except Exception as e:
-    logger.error(f"[CHAIN] ⚠️ No se pudo inicializar la cadena QA: {str(e)}")
+    logger.error(f"[CHAIN] No se pudo inicializar la cadena QA: {str(e)}")
 
 @app.route('/ask', methods=['POST'])
 def ask_question():
@@ -73,38 +73,43 @@ def ask_question():
                 "archivo": os.path.basename(metadata.get("source", "documento_desconocido"))
             })
 
-        # 3. Armar prompt híbrido
         joined_context = "\n\n".join(f"- {ctx}" for ctx in context_texts) if has_sources else "Sin contexto legal relevante."
 
+        # 3. Prompt optimizado
         hybrid_prompt = f"""
-        Eres un experto en tránsito colombiano. El usuario te hace la siguiente pregunta:
+            Eres un experto en tránsito colombiano. El usuario te hace la siguiente pregunta:
 
-        \"{query}\"
+            \"{query}\"
 
-        Te proporciono algunos fragmentos legales que podrían estar relacionados:
+            A continuación tienes fragmentos legales relacionados (si existen):
 
-        {joined_context}
+            {joined_context}
 
-        Si alguno de los fragmentos contiene una respuesta directa o relacionada con la pregunta, úsala exactamente. 
-        Si no hay información útil en los fragmentos, responde usando tu conocimiento general.
+            Utiliza los fragmentos únicamente si realmente responden la pregunta; si no sirven o son ambiguos, responde con tu conocimiento general manteniendo coherencia legal.
 
-        Responde de forma clara, breve y útil, en máximo 6 líneas.
-        Evita explicaciones largas o técnicas innecesarias.
+            Responde SIEMPRE en un solo párrafo, sin subtítulos, sin viñetas, sin negritas y sin dividir en secciones. La redacción debe sonar natural, clara y humana. No seas repetitivo ni técnico en exceso. 
 
-        Respuesta:
-        """
+            Instrucciones adicionales: 
+            - NO inventes artículos.  
+            - Si un fragmento legal es relevante, úsalo exactamente, pero explícalo con tus palabras.
+            """
 
-        logger.info("[PROMPT] Enviando prompt híbrido a Gemini...")
-        response_text = llm_model.invoke(hybrid_prompt).content.strip()
+        logger.info("[PROMPT] Enviando prompt a LLM...")
+        raw_text = llm_model.invoke(hybrid_prompt).content.strip()
 
+        # Limpieza para evitar saltos dobles
+        response_text = raw_text.replace("\n\n", "\n").strip()
+
+        # RESPUETA FINAL PARA EL FRONTEND
         return jsonify({
-            "response": response_text,
+            "message": response_text,
             "sources": formatted_sources,
-            "context_used": has_sources
+            "context_used": has_sources,
+            "type": "answer"
         }), 200
 
     except Exception as e:
-        logger.error(f"❌ Error procesando pregunta: {str(e)}", exc_info=True)
+        logger.error(f"Error procesando pregunta: {str(e)}", exc_info=True)
         return jsonify({
             "error": "Ocurrió un error al procesar tu pregunta. Por favor intenta nuevamente."
         }), 500
