@@ -9,7 +9,7 @@ const API_URLS = {
     // Si pruebas en dispositivo físico usa tu IP local: 'http://192.168.1.XXX:8000'
     android: 'http://10.0.2.2:8000',
     ios: 'http://localhost:8000',
-    physical: 'http://192.168.68.172:8000', // Cambia por tu IP local
+    physical: 'http://192.168.1.7:8000', // Cambia por tu IP local
   },
   
   // Para producción

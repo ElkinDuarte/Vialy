@@ -1,37 +1,65 @@
-from langchain.chains import RetrievalQA
-from langchain_google_genai import ChatGoogleGenerativeAI
-from app.rag.vectorstore import create_vectorstore
-from app.rag.splitter import split_documents
-from app.rag.loader import load_documents
+"""
+Módulo para crear la cadena RAG con Gemini
+"""
+
 import os
+import logging
+from dotenv import load_dotenv
+
+# Cargar variables de entorno
+load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 def create_chain():
-    """Crea y retorna la cadena QA de RAG junto al modelo LLM."""
-    try:
-        documents = load_documents()
-        chunks = split_documents(documents)
-        vectorstore = create_vectorstore(chunks)
-
-        google_api_key = os.getenv("GOOGLE_API_KEY")
-        if not google_api_key:
-            raise ValueError("GOOGLE_API_KEY no está configurada en las variables de entorno")
+    """
+    Crea la cadena RAG y el modelo LLM
+    
+    Returns:
+        tuple: (qa_chain, llm_model)
         
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
-            google_api_key=google_api_key,
-            temperature=0.2,
-            max_output_tokens=720
+    Raises:
+        ValueError: Si GOOGLE_API_KEY no está configurada
+    """
+    
+    # Verificar que GOOGLE_API_KEY esté configurada
+    api_key = os.getenv('GOOGLE_API_KEY')
+    if not api_key:
+        raise ValueError("GOOGLE_API_KEY no está configurada en las variables de entorno")
+    
+    try:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        from langchain.chains import RetrievalQA
+        from app.rag.vectorstore import get_vectorstore
+        
+        logger.info("Inicializando modelo Gemini...")
+        
+        # Configurar modelo
+        model_name = os.getenv('MODEL_NAME', 'gemini-2.0-flash')
+        temperature = float(os.getenv('TEMPERATURE', '0.3'))
+        
+        llm_model = ChatGoogleGenerativeAI(
+            model=model_name,
+            google_api_key=api_key,
+            temperature=temperature
         )
-
+        
+        logger.info("Cargando vectorstore...")
+        vectorstore = get_vectorstore()
+        
+        logger.info("Creando cadena QA...")
         qa_chain = RetrievalQA.from_chain_type(
-            llm=llm,
+            llm=llm_model,
             chain_type="stuff",
-            retriever=vectorstore.as_retriever(search_kwargs={"k": 4}),
+            retriever=vectorstore.as_retriever(
+                search_kwargs={"k": int(os.getenv('TOP_K_DOCUMENTS', '3'))}
+            ),
             return_source_documents=True
         )
-
-        return qa_chain, llm
-
+        
+        logger.info("✅ Cadena RAG creada exitosamente")
+        return qa_chain, llm_model
+        
     except Exception as e:
-        print(f"Error creando cadena QA: {str(e)}")
+        logger.error(f"Error creando cadena RAG: {str(e)}", exc_info=True)
         raise
