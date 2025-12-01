@@ -12,4 +12,4 @@ __pycache__/
 .vscode/
 .idea/
 
-/Backend_Vialy/.env
+Backend_Vialy/.env
