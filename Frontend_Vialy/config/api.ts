@@ -1,51 +1,41 @@
-// config/api.ts
-
-// Configuración de URLs según el entorno
+// Configuración de URLs según entorno
 const API_URLS = {
-  // Para desarrollo local
-  development: {
-    // Si pruebas en Android Emulator usa: 'http://10.0.2.2:8000'
-    // Si pruebas en iOS Simulator usa: 'http://localhost:8000'
-    // Si pruebas en dispositivo físico usa tu IP local: 'http://192.168.1.XXX:8000'
-    android: 'http://10.0.2.2:8000',
-    ios: 'http://localhost:8000',
-    physical: 'http://192.168.1.7:8000', // Cambia por tu IP local
-  },
-  
-  // Para producción
   production: {
-    url: 'https://tu-dominio.com/api', // Tu URL de producción
+    base: 'http://10.191.36.210:8000',
+  },
+  development: {
+    android: 'http://10.0.2.2:5000', // Flask usa 5000
+    ios: 'http://localhost:5000',
+    physical: 'http://10.191.36.210:8000', // IP correcta local
   }
 };
+
 
 // Detectar el entorno y plataforma
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 
 const isProduction = Constants.expoConfig?.extra?.production || false;
 
+
 // Función para obtener la URL base de la API
 export const getApiUrl = (): string => {
-  if (isProduction) {
-    return API_URLS.production.url;
-  }
-
-  // Desarrollo
-  if (Platform.OS === 'android') {
-    return API_URLS.development.android;
-  } else if (Platform.OS === 'ios') {
-    return API_URLS.development.ios;
-  } else {
-    // Web o dispositivo físico - usa tu IP local
-    return API_URLS.development.physical;
-  }
+  return API_URLS.development.physical;
 };
+
 
 // Endpoints de la API
 export const API_ENDPOINTS = {
   ASK: '/ask',
   HEALTH: '/health',
+  REGISTER: '/register',
+  LOGIN: '/login',
+  CONVERSATIONS: '/conversations',
+  MESSAGES: '/messages',
 };
+
 
 // Función helper para hacer peticiones
 export const apiRequest = async (
@@ -53,25 +43,39 @@ export const apiRequest = async (
   options: RequestInit = {}
 ): Promise<any> => {
   const url = `${getApiUrl()}${endpoint}`;
-  
-  const defaultOptions: RequestInit = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+
+  // Obtener user_id guardado en AsyncStorage
+  const user_id = await AsyncStorage.getItem('user_id');
+
+  // Construir headers combinando defaults con los que vienen en options
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(user_id ? { 'X-User-ID': user_id } : {}),
+    ...(options.headers || {}),
+  };
+
+  const finalOptions: RequestInit = {
     ...options,
+    headers: headers, // Aseguramos que usamos los headers combinados
   };
 
   try {
-    const response = await fetch(url, defaultOptions);
-    
+    const response = await fetch(url, finalOptions);
+
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const text = await response.text();
+      throw new Error(`HTTP ${response.status}: ${text}`);
     }
-    
+
     return await response.json();
   } catch (error) {
     console.error('API Request Error:', error);
     throw error;
   }
+};
+
+
+export const getBaseUrl = (): string => {
+  // ahora mismo es la misma que la de la API
+  return getApiUrl();
 };

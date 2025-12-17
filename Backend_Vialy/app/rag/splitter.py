@@ -1,20 +1,26 @@
-# app/rag/splitter.py
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
 from typing import List
-from langchain.schema import Document
+import logging
+
+logger = logging.getLogger(__name__)
 
 def split_documents(documents: List[Document]) -> List[Document]:
     """Divide documentos en chunks más pequeños."""
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=250,
-        chunk_overlap=40,
-        length_function=len,
-        separators=[
-            "\nArtículo ", "\nARTÍCULO ", "\nArt. ", 
-            "\nParágrafo", "\n", ".", " "
-        ],
-        add_start_index=True
-    )
-    chunks = splitter.split_documents(documents)
-    print(f"[SPLITTER] {len(chunks)} chunks generados.")
-    return chunks
+    try:
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200,
+            length_function=len,
+            separators=[
+                "\nArtículo ", "\nARTÍCULO ", "\nArt. ", 
+                "\nParágrafo", "\n\n", "\n", ".", " ", ""
+            ],
+            add_start_index=True
+        )
+        chunks = splitter.split_documents(documents)
+        logger.info(f"📄 {len(chunks)} chunks generados")
+        return chunks
+    except Exception as e:
+        logger.error(f"Error al dividir documentos: {str(e)}")
+        raise

@@ -1,9 +1,14 @@
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
+  Alert,
+  AppState,
+  AppStateStatus,
   Dimensions,
-  SafeAreaView,
+  KeyboardAvoidingView,
+  Keyboard,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -12,6 +17,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { API_ENDPOINTS, apiRequest } from '../../config/api';
 
 const { height } = Dimensions.get('window');
 
@@ -25,19 +31,62 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [countryCode, setCountryCode] = useState('+57');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleRegister = () => {
-    console.log('Register:', { firstName, lastName, email, birthDate, phoneNumber, password });
+  const appState = useRef(AppState.currentState);
+
+  // Manejar ciclo de vida de la app
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  const handleAppStateChange = (nextAppState: AppStateStatus) => {
+    if (
+      appState.current.match(/inactive|background/) &&
+      nextAppState === 'active'
+    ) {
+      // App ha pasado de background a foreground
+      Keyboard.dismiss();
+    }
+    appState.current = nextAppState;
   };
 
   const handleGoBack = () => {
     navigation.goBack();
   };
 
+  const handleRegister = async () => {
+    setIsLoading(true);
+    try {
+      const data = await apiRequest(API_ENDPOINTS.REGISTER, {
+        method: 'POST',
+        body: JSON.stringify({
+          first_name: firstName,
+          last_name: lastName,
+          email: email,
+          birth_date: birthDate,
+          phone_number: phoneNumber,
+          country_code: countryCode,
+          password: password,
+        }),
+      });
+      Alert.alert('Éxito', 'Usuario registrado exitosamente. Ahora puedes iniciar sesión.');
+      navigation.navigate('Login');
+    } catch (error) {
+      console.error('Error:', error);
+      Alert.alert('Error', 'Error al registrar usuario. Verifica tu conexión.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0A1F3E" translucent={false} />
       
       {/* Header con gradiente */}
       <LinearGradient
@@ -75,7 +124,16 @@ export default function RegisterScreen() {
       </LinearGradient>
 
       {/* Formulario */}
-      <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        style={styles.flex}
+        enabled={true}
+      >
+        <ScrollView 
+          style={styles.formContainer} 
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={true}
+        >
         {/* Nombre y Apellido */}
         <View style={styles.rowInputs}>
           <View style={[styles.inputGroup, styles.halfInput]}>
@@ -175,8 +233,9 @@ export default function RegisterScreen() {
         <TouchableOpacity style={styles.registerButton} onPress={handleRegister}>
           <Text style={styles.registerButtonText}>Registrar</Text>
         </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -184,6 +243,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  flex: {
+    flex: 1,
+  },
+  keyboardView: {
+    flex: 1,
   },
   header: {
     paddingTop: 20,

@@ -1,10 +1,14 @@
 import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     Alert,
-    SafeAreaView,
+    AppState,
+    AppStateStatus,
+    KeyboardAvoidingView,
+    Keyboard,
+    Platform,
     ScrollView,
     StatusBar,
     StyleSheet,
@@ -27,7 +31,29 @@ export default function EditProfileScreen({ navigation, route }: EditProfileScre
   const [phone, setPhone] = useState(userData?.phone || '');
   const [city, setCity] = useState(userData?.city || '');
 
+  const appState = useRef(AppState.currentState);
+
+  // Manejar ciclo de vida de la app
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  const handleAppStateChange = (nextAppState: AppStateStatus) => {
+    if (
+      appState.current.match(/inactive|background/) &&
+      nextAppState === 'active'
+    ) {
+      // App ha pasado de background a foreground
+      Keyboard.dismiss();
+    }
+    appState.current = nextAppState;
+  };
+
   const handleGoBack = () => {
+    Keyboard.dismiss();
     navigation.goBack();
   };
 
@@ -53,8 +79,8 @@ export default function EditProfileScreen({ navigation, route }: EditProfileScre
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0A1F3E" translucent={false} />
 
       {/* Header */}
       <LinearGradient colors={['#0A1F3E', '#0A1F3E']} style={styles.header}>
@@ -69,7 +95,16 @@ export default function EditProfileScreen({ navigation, route }: EditProfileScre
         </View>
       </LinearGradient>
 
-      <ScrollView style={styles.content}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        style={styles.flex}
+        enabled={true}
+      >
+        <ScrollView 
+          style={styles.content}
+          showsVerticalScrollIndicator={true}
+          bounces={true}
+        >
         {/* Avatar Section */}
         <View style={styles.avatarSection}>
           <View style={styles.avatar}>
@@ -138,8 +173,9 @@ export default function EditProfileScreen({ navigation, route }: EditProfileScre
             <Text style={styles.saveButtonText}>Guardar Cambios</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -147,6 +183,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  flex: {
+    flex: 1,
   },
   header: {
     paddingTop: 10,
@@ -181,6 +220,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    backgroundColor: '#f5f5f5',
   },
   avatarSection: {
     backgroundColor: '#fff',

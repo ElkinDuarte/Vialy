@@ -1,12 +1,16 @@
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import LogoSvg from '../../assets/images/logo.svg';
 
 
 import {
+  AppState,
+  AppStateStatus,
   Dimensions,
-  SafeAreaView,
+  KeyboardAvoidingView,
+  Keyboard,
+  Platform,
   StatusBar,
   StyleSheet,
   Text,
@@ -14,6 +18,9 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { API_ENDPOINTS, apiRequest } from '../../config/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
 
 const { height } = Dimensions.get('window');
 
@@ -23,9 +30,26 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  
+  const appState = useRef(AppState.currentState);
 
-  const handleLogin = () => {
-    console.log('Login:', { email, password });
+  // Manejar ciclo de vida de la app
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  const handleAppStateChange = (nextAppState: AppStateStatus) => {
+    if (
+      appState.current.match(/inactive|background/) &&
+      nextAppState === 'active'
+    ) {
+      // App ha pasado de background a foreground
+      Keyboard.dismiss();
+    }
+    appState.current = nextAppState;
   };
 
   const handleGoogleLogin = () => {
@@ -36,9 +60,49 @@ export default function LoginScreen() {
     console.log('Facebook login');
   };
 
+ const handleLogin = async () => {
+  if (!email || !password) {
+    Alert.alert('Error', 'Ingrese email y contraseña');
+    return;
+  }
+
+  try {
+    const data = await apiRequest(API_ENDPOINTS.LOGIN, {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+
+    // Login exitoso
+    if (data.success) {
+      await AsyncStorage.setItem('access_token', data.access_token);
+      await AsyncStorage.setItem('user', JSON.stringify(data.user));
+      await AsyncStorage.setItem('user_id', String(data.user.id));
+
+      if (data.session_id) {
+        await AsyncStorage.setItem('session_id', data.session_id);
+      }
+
+      navigation.navigate('Chat');
+    } else {
+      // Backend devolvió success = false
+      Alert.alert('Error', data.message || 'Credenciales incorrectas');
+    }
+
+  } catch (error: any) {
+    // Error HTTP específico
+    if (error.message.includes('HTTP 401')) {
+      Alert.alert('Error', 'Usuario o contraseña incorrectos');
+    } else if (error.message.includes('HTTP 400')) {
+      Alert.alert('Error', 'Datos enviados incorrectos');
+    } else {
+      console.error('Login error:', error);
+      Alert.alert('Error', 'No se pudo conectar al servidor');
+    }
+  }
+};
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0A1F3E" translucent={false} />
       
       {/* Header con gradiente */}
       <LinearGradient
@@ -80,7 +144,12 @@ export default function LoginScreen() {
       </LinearGradient>
 
       {/* Formulario */}
-      <View style={styles.formContainer}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        style={styles.flex}
+        enabled={true}
+      >
+        <View style={styles.formContainer}>
         {/* Email Input */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Email</Text>
@@ -134,7 +203,7 @@ export default function LoginScreen() {
         </View>
 
         {/* Botón Log In */}
-        <TouchableOpacity style={styles.loginButton} onPress={() => navigation.navigate('Chat')}>
+        <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
           <Text style={styles.loginButtonText}>Log In</Text>
         </TouchableOpacity>
 
@@ -164,8 +233,9 @@ export default function LoginScreen() {
         <Text style={styles.termsText}>
           Al registrarse, acepta los Términos de servicio y el Acuerdo de procesamiento de datos.
         </Text>
-      </View>
-    </SafeAreaView>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -173,6 +243,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  flex: {
+    flex: 1,
+  },
+  keyboardView: {
+    flex: 1,
   },
   header: {
     paddingTop: 20,

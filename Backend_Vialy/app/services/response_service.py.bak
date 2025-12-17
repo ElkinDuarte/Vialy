@@ -1,0 +1,185 @@
+"""
+Servicio de generación de respuestas.
+Maneja la lógica de generación de respuestas usando RAG y prompts especializados.
+"""
+
+import logging
+import os
+from typing import Dict, List, Tuple
+from app.core.prompts_mejorado import PromptTemplates
+
+logger = logging.getLogger(__name__)
+
+class ResponseService:
+    """Servicio para generar respuestas inteligentes"""
+    
+    def __init__(self, qa_chain, llm_model):
+        """
+        Inicializa el servicio de respuestas
+        
+        Args:
+            qa_chain: Cadena RAG para búsqueda de contexto
+            llm_model: Modelo LLM para generación de respuestas
+        """
+        self.qa_chain = qa_chain
+        self.llm_model = llm_model
+        logger.info("ResponseService inicializado")
+    
+    def get_rag_context(self, query: str) -> Tuple[List[Dict], str]:
+        """
+        Obtiene contexto usando RAG
+        
+        Args:
+            query: Pregunta del usuario
+            
+        Returns:
+            Tuple[List[Dict], str]: (fuentes formateadas, contexto en texto)
+        """
+        try:
+            # Pasar SOLO la query (no el prompt completo)
+            result = self.qa_chain.invoke({"query": query})
+            source_docs = result.get("source_documents", [])
+            
+            # Preparar fuentes formateadas
+            formatted_sources = []
+            context_texts = []
+            
+            for doc in source_docs:
+                # Manejar diferentes formatos de documento (objeto o dict)
+                try:
+                    metadata = getattr(doc, 'metadata', None) or (doc.get('metadata') if isinstance(doc, dict) else None)
+                except Exception:
+                    metadata = None
+
+                try:
+                    extracto = getattr(doc, 'page_content', None) or (doc.get('page_content') if isinstance(doc, dict) else '')
+                    extracto = (extracto or '').strip().replace("\n", " ")
+                except Exception:
+                    extracto = ''
+
+                if extracto:
+                    context_texts.append(extracto)
+
+                # Construir fuente formateada si existe metadata
+                if metadata:
+                    source_info = {}
+                    if isinstance(metadata, dict):
+                        source_info['source'] = metadata.get('source') or metadata.get('id') or metadata.get('filename')
+                    else:
+                        # intentar atributos
+                        source_info['source'] = getattr(metadata, 'source', None) or getattr(metadata, 'id', None)
+
+                    if source_info.get('source'):
+                        formatted_sources.append(source_info)
+            # Crear contexto en texto
+            if context_texts:
+                joined_context = "\n\n".join(f"- {ctx}" for ctx in context_texts)
+            else:
+                joined_context = "Sin contexto legal relevante."
+            
+            logger.info(f"RAG encontró {len(source_docs)} documentos relevantes")
+            return formatted_sources, joined_context
+            
+        except Exception as e:
+            logger.error(f"Error en RAG: {str(e)}", exc_info=True)
+            return [], "Sin contexto legal relevante."
+    
+    def generate_response(
+        self,
+        query: str,
+        category: str,
+        history: str,
+        rag_context: str,
+        conversation_context: str = ""
+    ) -> str:
+        """
+        Genera una respuesta usando el modelo LLM con query + categoría
+        
+        Args:
+            query: Pregunta del usuario
+            category: Categoría de la consulta (MULTA, REQUISITO, NORMATIVA, PROCEDIMIENTO, GENERAL)
+            history: Historial de conversación
+            rag_context: Contexto del RAG
+            conversation_context: Contexto de la conversación
+            
+        Returns:
+            str: Respuesta generada
+        """
+        try:
+            logger.info(f"Generando respuesta para query: {query[:80]}... | Categoría: {category}")
+            
+            # CAMBIO: Pasar query + categoría al modelo (necesita ambos para responder bien)
+            try:
+                response = self.llm_model.invoke(query, category).content.strip()
+            except AttributeError:
+                # Si el modelo no devuelve .content correctamente
+                response = str(self.llm_model.invoke(query, category)).strip()
+
+            if not response or response == "":
+                logger.warning(f"Respuesta vacía del modelo para query: {query}")
+                return self._get_fallback_response(category, query)
+
+            logger.info("Respuesta generada exitosamente")
+            return response
+
+        except Exception as e:
+            logger.error(f"Error generando respuesta: {str(e)}", exc_info=True)
+            # Retornar respuesta fallback específica por categoría
+            return self._get_fallback_response(category, query)
+    
+    def _get_fallback_response(self, category: str, query: str) -> str:
+        """Devuelve respuesta fallback según categoría"""
+        fallbacks = {
+            'MULTA': "No tengo información exacta. Consulta sobre: ¿Cuál es la infracción específica? (ej: exceso de velocidad, semáforo en rojo, sin licencia)",
+            'REQUISITO': "Para esto, te recomiendo llevar: Licencia vigente, cédula, SOAT vigente. ¿Necesitas saber algo más específico?",
+            'NORMATIVA': "El Código de Tránsito (Ley 769/2002) lo especifica. ¿Cuál artículo o situación te interesa?",
+            'PROCEDIMIENTO': "Para este procedimiento, dirígete a un Centro de Atención de Tránsito (CAT). ¿Necesitas los pasos específicos?",
+            'GENERAL': "No estoy seguro. ¿Puedes reformular tu pregunta sobre tránsito, multas, documentos o procedimientos?"
+        }
+        return fallbacks.get(category, "Por favor, reformula tu pregunta.")
+    
+    def process_query(
+        self,
+        query: str,
+        category: str,
+        history: str,
+        conversation_context: str = ""
+    ) -> Dict:
+        """
+        Procesa una consulta completa (RAG + generación de respuesta)
+        
+        Args:
+            query: Pregunta del usuario
+            category: Categoría de la consulta
+            history: Historial de conversación
+            
+        Returns:
+            Dict: Respuesta con sources y metadata
+        """
+        try:
+            # Obtener contexto con RAG
+            formatted_sources, rag_context = self.get_rag_context(query)
+
+            # Generar respuesta
+            response_text = self.generate_response(
+                query=query,
+                category=category,
+                history=history,
+                rag_context=rag_context,
+                conversation_context=conversation_context
+            )
+
+            return {
+                "response": response_text,
+                "sources": formatted_sources,
+                "context_used": len(formatted_sources) > 0
+            }
+            
+        except Exception as e:
+            logger.error(f"Error procesando consulta: {str(e)}", exc_info=True)
+            # Devolver fallo controlado para evitar 500
+            return {
+                "response": "Ocurrió un error procesando la consulta. Por favor intenta nuevamente.",
+                "sources": [],
+                "context_used": False
+            }

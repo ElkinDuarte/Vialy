@@ -1,8 +1,10 @@
 import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
-  SafeAreaView,
+  AppState,
+  AppStateStatus,
+  Keyboard,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -24,7 +26,29 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     city: 'Bogotá, Colombia'
   };
 
+  const appState = useRef(AppState.currentState);
+
+  // Manejar ciclo de vida de la app
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  const handleAppStateChange = (nextAppState: AppStateStatus) => {
+    if (
+      appState.current.match(/inactive|background/) &&
+      nextAppState === 'active'
+    ) {
+      // App ha pasado de background a foreground
+      Keyboard.dismiss();
+    }
+    appState.current = nextAppState;
+  };
+
   const handleGoBack = () => {
+    Keyboard.dismiss();
     navigation.goBack();
   };
 
@@ -33,8 +57,8 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0A1F3E" translucent={false} />
 
       {/* Header */}
       <LinearGradient colors={['#0A1F3E', '#0A1F3E']} style={styles.header}>
@@ -107,7 +131,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
